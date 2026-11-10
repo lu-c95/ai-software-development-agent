@@ -4,6 +4,7 @@ import argparse
 from pathlib import Path
 
 from ai_software_dev_agent import __version__
+from ai_software_dev_agent.repository import RepositoryError, RepositoryExplorer
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -20,22 +21,63 @@ def build_parser() -> argparse.ArgumentParser:
         version=f"%(prog)s {__version__}",
     )
 
-    # 使用子命令组织功能，方便后续扩展 inspect、plan、run 等命令。
     subparsers = parser.add_subparsers(
         dest="command",
         required=True,
     )
 
+    # 每个子命令只负责定义用户输入。
     doctor_parser = subparsers.add_parser(
         "doctor",
         help="检查目标项目目录",
     )
 
-    doctor_parser.add_argument(
-        "--project",
-        type=Path,
-        default=Path.cwd(),
-        help="目标项目目录，默认使用当前工作目录",
+    inspect_parser = subparsers.add_parser(
+        "inspect",
+        help="列出项目中的代码文件",
+    )
+
+    read_parser = subparsers.add_parser(
+        "read",
+        help="读取指定代码文件",
+    )
+
+    search_parser = subparsers.add_parser(
+        "search",
+        help="搜索代码关键词",
+    )
+
+    # 所有子命令共享项目目录参数。
+    for command_parser in (
+        doctor_parser,
+        inspect_parser,
+        read_parser,
+        search_parser,
+    ):
+        command_parser.add_argument(
+            "--project",
+            type=Path,
+            default=Path.cwd(),
+            help="目标项目目录",
+        )
+
+    read_parser.add_argument(
+        "--path",
+        required=True,
+        help="相对项目根目录的文件路径",
+    )
+
+    search_parser.add_argument(
+        "--query",
+        required=True,
+        help="搜索关键词",
+    )
+
+    search_parser.add_argument(
+        "--limit",
+        type=int,
+        default=20,
+        help="最多返回的结果数",
     )
 
     return parser
@@ -47,17 +89,38 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
-    if args.command == "doctor":
-        # 统一转换为绝对路径，避免后续工具使用路径时产生歧义。
-        project_path = args.project.expanduser().resolve()
+    try:
+        explorer = RepositoryExplorer(args.project)
 
-        # 当前只检查目录有效性，不读取或修改项目代码。
-        if not project_path.is_dir():
-            parser.error(f"项目目录不存在或不是文件夹：{project_path}")
+        if args.command == "doctor":
+            print(f"项目目录检查通过：{explorer.root}")
+            print("当前模式：仅进行目录检查，不修改任何文件。")
 
-        print(f"项目目录检查通过：{project_path}")
-        print("当前模式：仅进行目录检查，不修改任何文件。")
+        elif args.command == "inspect":
+            files = explorer.list_files()
 
-        return 0
+            print(f"找到 {len(files)} 个可探索文件：")
 
-    return 2
+            for path in files:
+                print(path)
+
+        elif args.command == "read":
+            content = explorer.read_file(args.path)
+            print(content, end="")
+
+        elif args.command == "search":
+            hits = explorer.search(
+                args.query,
+                limit=args.limit,
+            )
+
+            print(f"找到 {len(hits)} 条匹配结果：")
+
+            for hit in hits:
+                print(f"{hit.path}:{hit.line_number}: {hit.line}")
+
+    except RepositoryError as exc:
+        # 将领域错误转换成用户能够理解的 CLI 错误。
+        parser.error(str(exc))
+
+    return 0

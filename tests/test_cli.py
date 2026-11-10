@@ -14,7 +14,6 @@ def test_doctor_accepts_existing_directory(
     """有效项目目录应该检查成功。"""
 
     result = main(["doctor", "--project", str(tmp_path)])
-
     output = capsys.readouterr().out
 
     assert result == 0
@@ -42,12 +41,11 @@ def test_doctor_uses_current_directory_by_default(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """未指定项目目录时，使用当前工作目录。"""
+    """未指定项目目录时使用当前工作目录。"""
 
     monkeypatch.chdir(tmp_path)
 
     result = main(["doctor"])
-
     output = capsys.readouterr().out
 
     assert result == 0
@@ -64,3 +62,73 @@ def test_help_displays_doctor_command(
 
     assert exc_info.value.code == 0
     assert "doctor" in capsys.readouterr().out
+
+
+def test_inspect_lists_files(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """CLI 应该能列出仓库代码文件。"""
+
+    (tmp_path / "a.py").write_text("pass\n", encoding="utf-8")
+
+    result = main(
+        [
+            "inspect",
+            "--project",
+            str(tmp_path),
+        ]
+    )
+
+    assert result == 0
+    assert "a.py" in capsys.readouterr().out
+
+
+def test_read_displays_file(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """CLI 应该能显示指定文件内容。"""
+
+    (tmp_path / "a.py").write_text(
+        "value = 42\n",
+        encoding="utf-8",
+    )
+
+    result = main(
+        [
+            "read",
+            "--project",
+            str(tmp_path),
+            "--path",
+            "a.py",
+        ]
+    )
+
+    assert result == 0
+    assert "value = 42" in capsys.readouterr().out
+
+
+def test_search_displays_matches(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """CLI 应该能显示带行号的搜索结果。"""
+
+    (tmp_path / "a.py").write_text(
+        "def main():\n    pass\n",
+        encoding="utf-8",
+    )
+
+    result = main(
+        [
+            "search",
+            "--project",
+            str(tmp_path),
+            "--query",
+            "def main",
+        ]
+    )
+
+    assert result == 0
+    assert "a.py:1: def main():" in capsys.readouterr().out
