@@ -83,9 +83,7 @@ from pathlib import Path
 
 
 # 只处理允许的代码和文本文件类型。
-ALLOWED_SUFFIXES = frozenset(
-    {".py", ".toml", ".md", ".txt", ".json", ".yaml", ".yml"}
-)
+ALLOWED_SUFFIXES = frozenset({".py", ".toml", ".md", ".txt", ".json", ".yaml", ".yml"})
 
 # 跳过虚拟环境、缓存、版本控制及运行时目录。
 IGNORED_DIRS = frozenset(
@@ -132,18 +130,14 @@ class RepositoryExplorer:
         self.root = root.expanduser().resolve()
 
         if not self.root.is_dir():
-            raise RepositoryError(
-                f"项目目录不存在或不是文件夹：{self.root}"
-            )
+            raise RepositoryError(f"项目目录不存在或不是文件夹：{self.root}")
 
     def list_files(self) -> list[str]:
         """遍历仓库，返回允许探索的文件相对路径。"""
 
         found: list[str] = []
 
-        for current_dir, dirnames, filenames in os.walk(
-            self.root, followlinks=False
-        ):
+        for current_dir, dirnames, filenames in os.walk(self.root, followlinks=False):
             current = Path(current_dir)
 
             # 原地过滤子目录，阻止进入忽略目录及目录符号链接。
@@ -164,9 +158,7 @@ class RepositoryExplorer:
                 if file_path.suffix.lower() not in ALLOWED_SUFFIXES:
                     continue
 
-                found.append(
-                    file_path.relative_to(self.root).as_posix()
-                )
+                found.append(file_path.relative_to(self.root).as_posix())
 
                 if len(found) > MAX_FILES:
                     raise RepositoryError(
@@ -181,41 +173,29 @@ class RepositoryExplorer:
         given_path = Path(relative_path)
 
         if given_path.is_absolute():
-            raise RepositoryError(
-                "只能使用相对于项目根目录的路径"
-            )
+            raise RepositoryError("只能使用相对于项目根目录的路径")
 
         path = (self.root / given_path).resolve()
 
         if not path.is_relative_to(self.root):
-            raise RepositoryError(
-                "文件不在指定项目目录内"
-            )
+            raise RepositoryError("文件不在指定项目目录内")
 
         relative = path.relative_to(self.root)
 
         if any(part in IGNORED_DIRS for part in relative.parts):
-            raise RepositoryError(
-                "不允许访问已忽略的目录"
-            )
+            raise RepositoryError("不允许访问已忽略的目录")
 
         if any(part.startswith(".") for part in relative.parts):
-            raise RepositoryError(
-                "不允许访问隐藏文件或目录"
-            )
+            raise RepositoryError("不允许访问隐藏文件或目录")
 
         if path.suffix.lower() not in ALLOWED_SUFFIXES:
             raise RepositoryError("不支持该文件类型")
 
         if not path.is_file():
-            raise RepositoryError(
-                f"文件不存在：{relative_path}"
-            )
+            raise RepositoryError(f"文件不存在：{relative_path}")
 
         if path.stat().st_size > MAX_FILE_BYTES:
-            raise RepositoryError(
-                f"文件超过 {MAX_FILE_BYTES} 字节限制"
-            )
+            raise RepositoryError(f"文件超过 {MAX_FILE_BYTES} 字节限制")
 
         return path
 
@@ -227,22 +207,16 @@ class RepositoryExplorer:
         try:
             return path.read_text(encoding="utf-8")
         except (UnicodeError, OSError) as exc:
-            raise RepositoryError(
-                f"文件读取失败：{relative_path}"
-            ) from exc
+            raise RepositoryError(f"文件读取失败：{relative_path}") from exc
 
-    def search(
-        self, keyword: str, limit: int = 20
-    ) -> list[SearchHit]:
+    def search(self, keyword: str, limit: int = 20) -> list[SearchHit]:
         """搜索关键词，返回文件路径、行号与匹配内容。"""
 
         if not keyword.strip():
             raise RepositoryError("搜索关键词不能为空")
 
         if not 1 <= limit <= 100:
-            raise RepositoryError(
-                "搜索结果数量必须在 1 到 100 之间"
-            )
+            raise RepositoryError("搜索结果数量必须在 1 到 100 之间")
 
         hits: list[SearchHit] = []
         needle = keyword.casefold()
@@ -254,9 +228,7 @@ class RepositoryExplorer:
                 # 跳过超过大小限制或无法读取的文件。
                 continue
 
-            for number, line in enumerate(
-                content.splitlines(), start=1
-            ):
+            for number, line in enumerate(content.splitlines(), start=1):
                 if needle in line.casefold():
                     hits.append(
                         SearchHit(
@@ -277,9 +249,7 @@ class RepositoryExplorer:
 #### 3.2.1 定义访问规则
 
 ```python
-ALLOWED_SUFFIXES = frozenset(
-    {".py", ".toml", ".md", ".txt", ".json", ".yaml", ".yml"}
-)
+ALLOWED_SUFFIXES = frozenset({".py", ".toml", ".md", ".txt", ".json", ".yaml", ".yml"})
 
 MAX_FILES = 500
 MAX_FILE_BYTES = 64 * 1024
@@ -298,9 +268,7 @@ def __init__(self, root: Path) -> None:
     self.root = root.expanduser().resolve()
 
     if not self.root.is_dir():
-        raise RepositoryError(
-            f"项目目录不存在或不是文件夹：{self.root}"
-        )
+        raise RepositoryError(f"项目目录不存在或不是文件夹：{self.root}")
 ```
 
 主要完成两个操作：
@@ -409,9 +377,7 @@ def read_file(self, relative_path: str) -> str:
     try:
         return path.read_text(encoding="utf-8")
     except (UnicodeError, OSError) as exc:
-        raise RepositoryError(
-            f"文件读取失败：{relative_path}"
-        ) from exc
+        raise RepositoryError(f"文件读取失败：{relative_path}") from exc
 ```
 
 流程：
@@ -437,9 +403,7 @@ for relative_path in self.list_files():
     except RepositoryError:
         continue
 
-    for number, line in enumerate(
-        content.splitlines(), start=1
-    ):
+    for number, line in enumerate(content.splitlines(), start=1):
         if needle in line.casefold():
             hits.append(
                 SearchHit(
@@ -612,9 +576,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"找到 {len(hits)} 条匹配结果：")
 
             for hit in hits:
-                print(
-                    f"{hit.path}:{hit.line_number}: {hit.line}"
-                )
+                print(f"{hit.path}:{hit.line_number}: {hit.line}")
 
     except RepositoryError as exc:
         # 业务异常转换成用户能够理解的命令行错误。
@@ -745,32 +707,22 @@ def test_list_files_ignores_cache_and_binary(tmp_path: Path) -> None:
     """扫描时应跳过虚拟环境与不支持的文件。"""
 
     (tmp_path / "app").mkdir()
-    (tmp_path / "app" / "main.py").write_text(
-        "print('ok')\n", encoding="utf-8"
-    )
+    (tmp_path / "app" / "main.py").write_text("print('ok')\n", encoding="utf-8")
 
     (tmp_path / ".venv").mkdir()
-    (tmp_path / ".venv" / "private.py").write_text(
-        "secret", encoding="utf-8"
-    )
+    (tmp_path / ".venv" / "private.py").write_text("secret", encoding="utf-8")
 
     (tmp_path / "image.png").write_bytes(b"\x00\x01")
 
-    assert RepositoryExplorer(tmp_path).list_files() == [
-        "app/main.py"
-    ]
+    assert RepositoryExplorer(tmp_path).list_files() == ["app/main.py"]
 
 
 def test_read_file(tmp_path: Path) -> None:
     """应该正确读取 UTF-8 文件及中文内容。"""
 
-    (tmp_path / "main.py").write_text(
-        "hello = '你好'\n", encoding="utf-8"
-    )
+    (tmp_path / "main.py").write_text("hello = '你好'\n", encoding="utf-8")
 
-    assert RepositoryExplorer(tmp_path).read_file("main.py") == (
-        "hello = '你好'\n"
-    )
+    assert RepositoryExplorer(tmp_path).read_file("main.py") == ("hello = '你好'\n")
 
 
 def test_read_rejects_outside_path(tmp_path: Path) -> None:
@@ -800,17 +752,13 @@ def test_read_rejects_ignored_directory(tmp_path: Path) -> None:
     """不允许读取运行时数据目录。"""
 
     (tmp_path / ".runtime").mkdir()
-    (tmp_path / ".runtime" / "record.json").write_text(
-        "{}", encoding="utf-8"
-    )
+    (tmp_path / ".runtime" / "record.json").write_text("{}", encoding="utf-8")
 
     with pytest.raises(
         RepositoryError,
         match="不允许访问已忽略的目录",
     ):
-        RepositoryExplorer(tmp_path).read_file(
-            ".runtime/record.json"
-        )
+        RepositoryExplorer(tmp_path).read_file(".runtime/record.json")
 
 
 def test_read_rejects_oversized_file(tmp_path: Path) -> None:
@@ -835,10 +783,7 @@ def test_search_returns_line_numbers(tmp_path: Path) -> None:
 
     hits = RepositoryExplorer(tmp_path).search("def main")
 
-    assert [
-        (hit.path, hit.line_number, hit.line)
-        for hit in hits
-    ] == [
+    assert [(hit.path, hit.line_number, hit.line) for hit in hits] == [
         ("main.py", 2, "Def Main():")
     ]
 
@@ -956,15 +901,15 @@ def test_inspect_lists_files(
 ) -> None:
     """CLI 应该能列出仓库代码文件。"""
 
-    (tmp_path / "a.py").write_text(
-        "pass\n", encoding="utf-8"
-    )
+    (tmp_path / "a.py").write_text("pass\n", encoding="utf-8")
 
-    result = main([
-        "inspect",
-        "--project",
-        str(tmp_path),
-    ])
+    result = main(
+        [
+            "inspect",
+            "--project",
+            str(tmp_path),
+        ]
+    )
 
     assert result == 0
     assert "a.py" in capsys.readouterr().out
@@ -981,13 +926,15 @@ def test_read_displays_file(
         encoding="utf-8",
     )
 
-    result = main([
-        "read",
-        "--project",
-        str(tmp_path),
-        "--path",
-        "a.py",
-    ])
+    result = main(
+        [
+            "read",
+            "--project",
+            str(tmp_path),
+            "--path",
+            "a.py",
+        ]
+    )
 
     assert result == 0
     assert "value = 42" in capsys.readouterr().out
@@ -1004,13 +951,15 @@ def test_search_displays_matches(
         encoding="utf-8",
     )
 
-    result = main([
-        "search",
-        "--project",
-        str(tmp_path),
-        "--query",
-        "def main",
-    ])
+    result = main(
+        [
+            "search",
+            "--project",
+            str(tmp_path),
+            "--query",
+            "def main",
+        ]
+    )
 
     assert result == 0
     assert "a.py:1: def main():" in capsys.readouterr().out
@@ -1053,10 +1002,7 @@ with pytest.raises(
 **3. 测试具体结果，而不仅是是否执行成功**
 
 ```python
-assert [
-    (hit.path, hit.line_number, hit.line)
-    for hit in hits
-] == [
+assert [(hit.path, hit.line_number, hit.line) for hit in hits] == [
     ("main.py", 2, "Def Main():")
 ]
 ```
@@ -1115,7 +1061,7 @@ print(Path.cwd())
 在本项目中：
 
 ```python
-default=Path.cwd()
+default = Path.cwd()
 ```
 
 表示不指定 `--project` 时，默认使用当前工作目录。
@@ -1324,7 +1270,7 @@ dirnames[:] = ["src"]
 ```python
 path = Path("Main.PY")
 
-print(path.suffix)          # .PY
+print(path.suffix)  # .PY
 print(path.suffix.lower())  # .py
 ```
 
@@ -1393,7 +1339,7 @@ if path.stat().st_size > MAX_FILE_BYTES:
 ```python
 text = "你好"
 
-print(len(text))                 # 2
+print(len(text))  # 2
 print(len(text.encode("utf-8")))  # 6
 ```
 
@@ -1423,14 +1369,14 @@ True
 普通英文中通常效果相近：
 
 ```python
-"HELLO".lower()     # "hello"
+"HELLO".lower()  # "hello"
 "HELLO".casefold()  # "hello"
 ```
 
 但部分 Unicode 字符不同：
 
 ```python
-"Straße".lower()     # "straße"
+"Straße".lower()  # "straße"
 "Straße".casefold()  # "strasse"
 ```
 
@@ -1486,7 +1432,7 @@ with open("hello.txt", "r", encoding="utf-8") as f:
 其中：
 
 ```python
-encoding="utf-8"
+encoding = "utf-8"
 ```
 
 指定使用 UTF-8 编码解码文件内容。
@@ -1526,7 +1472,7 @@ file_path = Path("/Users/test/my-project/src/main.py")
 
 result = file_path.relative_to(root)
 
-print(result)        # src/main.py
+print(result)  # src/main.py
 print(type(result))  # <class 'pathlib.PosixPath'>（macOS/Linux）
 ```
 
@@ -1547,7 +1493,7 @@ path = Path("src/main.py")
 
 result = path.as_posix()
 
-print(result)        # src/main.py
+print(result)  # src/main.py
 print(type(result))  # <class 'str'>
 ```
 
@@ -1566,9 +1512,7 @@ print(type(result))  # <class 'str'>
 Day 02 实际代码：
 
 ```python
-found.append(
-    file_path.relative_to(self.root).as_posix()
-)
+found.append(file_path.relative_to(self.root).as_posix())
 ```
 
 等价于：
