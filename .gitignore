@@ -35,3 +35,5 @@ logs/
 
 # macOS
 .DS_Store
+
+.openrouter_api_key.md

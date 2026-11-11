@@ -8,7 +8,13 @@ version = "0.1.0"
 description = "A Python AI software development agent"
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "langchain>=1.0,<2.0",
+    "langchain-core>=1.0,<2.0",
+    "langchain-openai>=1.0,<2.0",
+    "openai>=2.0,<4.0",
+    "python-dotenv>=1.0,<2.0",
+]
 
 [project.optional-dependencies]
 dev = [

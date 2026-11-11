@@ -1,9 +1,18 @@
 """AI 软件开发智能体的命令行入口。"""
 
 import argparse
+import sys
 from pathlib import Path
 
+from openai import APIStatusError, OpenAIError
+
 from ai_software_dev_agent import __version__
+from ai_software_dev_agent.model import (
+    ModelConfigError,
+    create_chat_model,
+    generate_answer,
+    load_model_settings,
+)
 from ai_software_dev_agent.repository import RepositoryError, RepositoryExplorer
 
 
@@ -26,7 +35,6 @@ def build_parser() -> argparse.ArgumentParser:
         required=True,
     )
 
-    # 每个子命令只负责定义用户输入。
     doctor_parser = subparsers.add_parser(
         "doctor",
         help="检查目标项目目录",
@@ -47,7 +55,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="搜索代码关键词",
     )
 
-    # 所有子命令共享项目目录参数。
+    # Day 03：新增模型问答命令。
+    ask_parser = subparsers.add_parser(
+        "ask",
+        help="使用 LangChain 调用聊天模型",
+    )
+
+    # 仓库相关命令共用项目目录参数。
     for command_parser in (
         doctor_parser,
         inspect_parser,
@@ -80,14 +94,56 @@ def build_parser() -> argparse.ArgumentParser:
         help="最多返回的结果数",
     )
 
+    ask_parser.add_argument(
+        "--question",
+        required=True,
+        help="发送给模型的问题",
+    )
+
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
-    """解析命令并执行对应功能。"""
+    """解析命令，调用对应的业务功能。"""
 
     parser = build_parser()
     args = parser.parse_args(argv)
+
+    # 模型问答目前不需要访问目标仓库，因此单独处理。
+    if args.command == "ask":
+        try:
+            settings = load_model_settings()
+            model = create_chat_model(settings)
+            answer = generate_answer(model, args.question)
+
+        except ModelConfigError as exc:
+            parser.error(str(exc))
+
+        except APIStatusError as exc:
+            if exc.status_code == 404:
+                reason = "模型不存在或当前不可用，请检查模型 ID"
+            elif exc.status_code == 429:
+                reason = "平台限流或模型访问量过大"
+            elif exc.status_code == 401:
+                reason = "API Key 无效或没有访问权限"
+            else:
+                reason = "请检查模型服务状态及请求配置"
+
+            print(
+                f"模型请求失败：HTTP {exc.status_code}，{reason}。",
+                file=sys.stderr,
+            )
+            return 1
+
+        except OpenAIError as exc:
+            print(
+                f"模型请求失败：{type(exc).__name__}。",
+                file=sys.stderr,
+            )
+            return 1
+
+        print(answer)
+        return 0
 
     try:
         explorer = RepositoryExplorer(args.project)
@@ -120,7 +176,6 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"{hit.path}:{hit.line_number}: {hit.line}")
 
     except RepositoryError as exc:
-        # 将领域错误转换成用户能够理解的 CLI 错误。
         parser.error(str(exc))
 
     return 0
