@@ -75,7 +75,7 @@ def create_chat_model(settings: ModelSettings) -> BaseChatModel:
         base_url=settings.base_url,
         timeout=120,
         max_retries=0,
-        max_tokens=1024,
+        max_tokens=2048,
         use_responses_api=False,
     )
 

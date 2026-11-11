@@ -4,7 +4,9 @@ import argparse
 import sys
 from pathlib import Path
 
+from langchain_core.exceptions import OutputParserException
 from openai import APIStatusError, OpenAIError
+from pydantic import ValidationError
 
 from ai_software_dev_agent import __version__
 from ai_software_dev_agent.model import (
@@ -13,7 +15,14 @@ from ai_software_dev_agent.model import (
     generate_answer,
     load_model_settings,
 )
-from ai_software_dev_agent.repository import RepositoryError, RepositoryExplorer
+from ai_software_dev_agent.planning import (
+    PlanningError,
+    generate_development_plan,
+)
+from ai_software_dev_agent.repository import (
+    RepositoryError,
+    RepositoryExplorer,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -55,13 +64,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="搜索代码关键词",
     )
 
-    # Day 03：新增模型问答命令。
     ask_parser = subparsers.add_parser(
         "ask",
         help="使用 LangChain 调用聊天模型",
     )
 
-    # 仓库相关命令共用项目目录参数。
+    # Day 04：新增结构化开发计划命令。
+    plan_parser = subparsers.add_parser(
+        "plan",
+        help="生成结构化软件开发计划",
+    )
+
     for command_parser in (
         doctor_parser,
         inspect_parser,
@@ -100,34 +113,68 @@ def build_parser() -> argparse.ArgumentParser:
         help="发送给模型的问题",
     )
 
+    plan_parser.add_argument(
+        "--task",
+        required=True,
+        help="需要制定计划的软件开发任务",
+    )
+
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
-    """解析命令，调用对应的业务功能。"""
+    """解析命令并执行对应功能。"""
 
     parser = build_parser()
     args = parser.parse_args(argv)
 
-    # 模型问答目前不需要访问目标仓库，因此单独处理。
-    if args.command == "ask":
+    # ask 与 plan 都需要模型，但执行不同业务逻辑。
+    if args.command in ("ask", "plan"):
         try:
             settings = load_model_settings()
             model = create_chat_model(settings)
-            answer = generate_answer(model, args.question)
+
+            if args.command == "ask":
+                answer = generate_answer(
+                    model,
+                    args.question,
+                )
+                print(answer)
+
+            else:
+                plan = generate_development_plan(
+                    model,
+                    args.task,
+                )
+
+                # Pydantic 模型转换成 JSON，供终端显示。
+                print(plan.model_dump_json(indent=2))
 
         except ModelConfigError as exc:
             parser.error(str(exc))
 
+        except (
+            PlanningError,
+            ValidationError,
+            OutputParserException,
+        ) as exc:
+            print(
+                f"开发计划结构化生成失败：{type(exc).__name__}。",
+                file=sys.stderr,
+            )
+            return 1
+
         except APIStatusError as exc:
-            if exc.status_code == 404:
-                reason = "模型不存在或当前不可用，请检查模型 ID"
+            if exc.status_code == 401:
+                reason = "API Key 无效或没有访问权限"
+            elif exc.status_code == 404:
+                reason = "模型不存在或当前不可用"
             elif exc.status_code == 429:
                 reason = "平台限流或模型访问量过大"
-            elif exc.status_code == 401:
-                reason = "API Key 无效或没有访问权限"
+            elif exc.status_code == 400:
+                reason = "请求参数错误或模型不支持该功能"
             else:
-                reason = "请检查模型服务状态及请求配置"
+                reason = "请检查模型服务状态和请求配置"
 
             print(
                 f"模型请求失败：HTTP {exc.status_code}，{reason}。",
@@ -142,7 +189,6 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 1
 
-        print(answer)
         return 0
 
     try:
@@ -154,7 +200,6 @@ def main(argv: list[str] | None = None) -> int:
 
         elif args.command == "inspect":
             files = explorer.list_files()
-
             print(f"找到 {len(files)} 个可探索文件：")
 
             for path in files:
