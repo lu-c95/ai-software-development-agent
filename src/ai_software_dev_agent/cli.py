@@ -5,10 +5,17 @@ import sys
 from pathlib import Path
 
 from langchain_core.exceptions import OutputParserException
+from langchain_core.messages import BaseMessage, ToolMessage
+from langchain_core.runnables import Runnable
 from openai import APIStatusError, OpenAIError
 from pydantic import ValidationError
 
 from ai_software_dev_agent import __version__
+from ai_software_dev_agent.agent import (
+    AgentExecutionError,
+    build_development_agent,
+    run_agent_turn,
+)
 from ai_software_dev_agent.model import (
     ModelConfigError,
     create_chat_model,
@@ -23,6 +30,22 @@ from ai_software_dev_agent.repository import (
     RepositoryError,
     RepositoryExplorer,
 )
+
+
+def describe_api_error(status_code: int) -> str:
+    """将常见 HTTP 错误转换成可理解的提示。"""
+
+    reasons = {
+        400: "请求参数错误或模型不支持该功能",
+        401: "API Key 无效或没有访问权限",
+        404: "模型不存在或当前不可用",
+        429: "平台限流或模型访问量过大",
+    }
+
+    return reasons.get(
+        status_code,
+        "请检查模型服务状态和请求配置",
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -69,17 +92,24 @@ def build_parser() -> argparse.ArgumentParser:
         help="使用 LangChain 调用聊天模型",
     )
 
-    # Day 04：新增结构化开发计划命令。
     plan_parser = subparsers.add_parser(
         "plan",
         help="生成结构化软件开发计划",
     )
 
+    # Day 05：新增持续对话入口。
+    chat_parser = subparsers.add_parser(
+        "chat",
+        help="与能够探索代码仓库的 Agent 持续对话",
+    )
+
+    # 需要指定目标仓库的命令，统一提供 --project。
     for command_parser in (
         doctor_parser,
         inspect_parser,
         read_parser,
         search_parser,
+        chat_parser,
     ):
         command_parser.add_argument(
             "--project",
@@ -122,13 +152,132 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def run_chat_session(
+    agent: Runnable,
+    project: Path,
+) -> int:
+    """启动持续对话，并在当前进程内维护消息历史。"""
+
+    history: list[BaseMessage] = []
+
+    print("AI Software Development Agent")
+    print(f"当前项目：{project.expanduser().resolve()}")
+    print("输入 /help 查看命令，输入 /exit 退出。")
+
+    while True:
+        try:
+            question = input("\n你：").strip()
+
+        except (EOFError, KeyboardInterrupt):
+            # Ctrl+D 或 Ctrl+C：正常结束交互。
+            print("\n再见！")
+            return 0
+
+        if not question:
+            continue
+
+        if question == "/exit":
+            print("再见！")
+            return 0
+
+        if question == "/help":
+            print("/help  查看帮助")
+            print("/new   清空当前对话历史")
+            print("/exit  退出交互式 CLI")
+            continue
+
+        if question == "/new":
+            history = []
+            print("已清空当前对话历史。")
+            continue
+
+        if question.startswith("/"):
+            print("未知命令，请输入 /help 查看可用命令。")
+            continue
+
+        try:
+            answer, updated_history = run_agent_turn(
+                agent,
+                history,
+                question,
+            )
+
+        except APIStatusError as exc:
+            print(
+                f"模型请求失败：HTTP {exc.status_code}，"
+                f"{describe_api_error(exc.status_code)}。",
+                file=sys.stderr,
+            )
+            continue
+
+        except OpenAIError as exc:
+            print(
+                f"模型请求失败：{type(exc).__name__}。",
+                file=sys.stderr,
+            )
+            continue
+
+        except RecursionError:
+            # LangGraph 的 GraphRecursionError 继承 RecursionError。
+            print(
+                "Agent 达到执行步数上限，本轮历史未保存，请尝试简化问题。",
+                file=sys.stderr,
+            )
+            continue
+
+        except (
+            AgentExecutionError,
+            ModelConfigError,
+            RepositoryError,
+            ValidationError,
+        ) as exc:
+            print(
+                f"Agent 执行失败：{exc}",
+                file=sys.stderr,
+            )
+            continue
+
+        except KeyboardInterrupt:
+            print("\n本轮请求已中断，可以继续输入。")
+            continue
+
+        # 只展示本轮新增的工具消息，不重复展示历史消息。
+        new_messages = updated_history[len(history) :]
+
+        for message in new_messages:
+            if isinstance(message, ToolMessage):
+                tool_name = message.name or "未知工具"
+                print(f"[工具返回] {tool_name}")
+
+        # 只有本轮完整成功，才更新会话历史。
+        history = updated_history
+
+        print(f"Agent：{answer}")
+
+
 def main(argv: list[str] | None = None) -> int:
     """解析命令并执行对应功能。"""
 
     parser = build_parser()
     args = parser.parse_args(argv)
 
-    # ask 与 plan 都需要模型，但执行不同业务逻辑。
+    # Day 05：Agent 交互会话。
+    if args.command == "chat":
+        try:
+            settings = load_model_settings()
+            model = create_chat_model(settings)
+
+            agent = build_development_agent(
+                model,
+                args.project,
+            )
+
+        except (ModelConfigError, RepositoryError) as exc:
+            parser.error(str(exc))
+
+        return run_chat_session(agent, args.project)
+
+    # Day 03、Day 04：普通问答和结构化规划。
     if args.command in ("ask", "plan"):
         try:
             settings = load_model_settings()
@@ -146,8 +295,6 @@ def main(argv: list[str] | None = None) -> int:
                     model,
                     args.task,
                 )
-
-                # Pydantic 模型转换成 JSON，供终端显示。
                 print(plan.model_dump_json(indent=2))
 
         except ModelConfigError as exc:
@@ -165,19 +312,9 @@ def main(argv: list[str] | None = None) -> int:
             return 1
 
         except APIStatusError as exc:
-            if exc.status_code == 401:
-                reason = "API Key 无效或没有访问权限"
-            elif exc.status_code == 404:
-                reason = "模型不存在或当前不可用"
-            elif exc.status_code == 429:
-                reason = "平台限流或模型访问量过大"
-            elif exc.status_code == 400:
-                reason = "请求参数错误或模型不支持该功能"
-            else:
-                reason = "请检查模型服务状态和请求配置"
-
             print(
-                f"模型请求失败：HTTP {exc.status_code}，{reason}。",
+                f"模型请求失败：HTTP {exc.status_code}，"
+                f"{describe_api_error(exc.status_code)}。",
                 file=sys.stderr,
             )
             return 1
@@ -191,6 +328,7 @@ def main(argv: list[str] | None = None) -> int:
 
         return 0
 
+    # Day 01、Day 02：仓库探索命令。
     try:
         explorer = RepositoryExplorer(args.project)
 
