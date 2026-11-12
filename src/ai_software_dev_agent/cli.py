@@ -31,10 +31,15 @@ from ai_software_dev_agent.repository import (
     RepositoryError,
     RepositoryExplorer,
 )
+from ai_software_dev_agent.test_runner import (
+    DEFAULT_TIMEOUT_SECONDS,
+    TestRunner,
+    TestRunnerError,
+)
 
 
 def describe_api_error(status_code: int) -> str:
-    """将常见 HTTP 错误转换成易理解的提示。"""
+    """将常见 HTTP 错误转换为容易理解的提示。"""
 
     reasons = {
         400: "请求参数错误或模型不支持该功能",
@@ -103,13 +108,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="与能够探索代码仓库的 Agent 持续对话",
     )
 
-    # Day 06：新增安全编辑命令。
     edit_parser = subparsers.add_parser(
         "edit",
         help="预览并确认一次 Python 代码修改",
     )
 
-    # 需要指定仓库的命令统一提供 --project。
+    # Day 07：新增 pytest 测试执行命令。
+    test_parser = subparsers.add_parser(
+        "test",
+        help="在指定项目中受控执行 pytest",
+    )
+
+    # 需要指定仓库的命令统一支持 --project。
     for command_parser in (
         doctor_parser,
         inspect_parser,
@@ -117,6 +127,7 @@ def build_parser() -> argparse.ArgumentParser:
         search_parser,
         chat_parser,
         edit_parser,
+        test_parser,
     ):
         command_parser.add_argument(
             "--project",
@@ -156,7 +167,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="需要制定计划的软件开发任务",
     )
 
-    # 编辑必须明确给出目标文件和替换内容。
+    # Day 06：安全文件编辑参数。
     edit_parser.add_argument(
         "--path",
         required=True,
@@ -166,7 +177,7 @@ def build_parser() -> argparse.ArgumentParser:
     edit_parser.add_argument(
         "--old",
         required=True,
-        help="需要被精确匹配的旧代码片段",
+        help="需要精确匹配的旧代码片段",
     )
 
     edit_parser.add_argument(
@@ -175,7 +186,82 @@ def build_parser() -> argparse.ArgumentParser:
         help="替换后的新代码片段",
     )
 
+    # Day 07：固定 pytest 目标与超时参数。
+    test_parser.add_argument(
+        "--target",
+        default="tests",
+        help="tests 目录或其中的 test_*.py 文件",
+    )
+
+    test_parser.add_argument(
+        "--timeout",
+        type=int,
+        default=DEFAULT_TIMEOUT_SECONDS,
+        help="执行超时秒数，范围 1～120，默认 30",
+    )
+
     return parser
+
+
+def run_test_command(
+    project: Path,
+    target: str,
+    timeout_seconds: int,
+) -> int:
+    """调用 TestRunner，并展示结构化 pytest 执行结果。"""
+
+    try:
+        runner = TestRunner(project)
+
+        result = runner.run(
+            target=target,
+            timeout_seconds=timeout_seconds,
+        )
+
+    except (TestRunnerError, OSError) as exc:
+        print(
+            f"测试参数或目标错误：{exc}",
+            file=sys.stderr,
+        )
+        return 2
+
+    # 将内部状态转换为用户更容易理解的文字。
+    status_labels = {
+        "passed": "通过",
+        "failed": "测试失败",
+        "no_tests": "未发现测试",
+        "error": "执行错误",
+        "timeout": "执行超时",
+    }
+
+    status_label = status_labels[result.status]
+
+    print(f"测试状态：{result.status}（{status_label}）")
+
+    # 超时或进程启动失败时，可能没有 pytest 退出码。
+    exit_code = str(result.exit_code) if result.exit_code is not None else "无"
+
+    print(f"pytest 退出码：{exit_code}")
+    print(f"执行耗时：{result.duration_seconds:.2f} 秒")
+
+    if result.stdout:
+        print("\n=== pytest 标准输出 ===")
+        print(
+            result.stdout,
+            end="" if result.stdout.endswith("\n") else "\n",
+        )
+
+    if result.stderr:
+        print("\n=== pytest 错误输出 ===", file=sys.stderr)
+        print(
+            result.stderr,
+            end="" if result.stderr.endswith("\n") else "\n",
+            file=sys.stderr,
+        )
+
+    # 只有全部通过才向调用方返回 0。
+    # 其他情况统一返回非零，便于后续工作流检测失败。
+    return 0 if result.passed else 1
 
 
 def run_edit_command(
@@ -186,7 +272,6 @@ def run_edit_command(
 ) -> int:
     """预览差异，获取用户确认，然后安全应用修改。"""
 
-    # 先生成预览，不立即修改文件。
     try:
         editor = CodeEditor(project)
 
@@ -211,7 +296,6 @@ def run_edit_command(
         end="" if preview.diff.endswith("\n") else "\n",
     )
 
-    # 必须显式输入 yes 才允许执行写操作。
     try:
         confirmation = input("\n输入 yes 确认写入，其他任意输入取消：").strip()
 
@@ -223,7 +307,6 @@ def run_edit_command(
         print("已取消修改，文件未写入。")
         return 0
 
-    # 确认之后调用已有组件，重新检查原始文件版本。
     try:
         editor.apply(preview)
 
@@ -243,7 +326,7 @@ def run_chat_session(
     agent: Runnable,
     project: Path,
 ) -> int:
-    """启动持续对话，并在当前进程内维护消息历史。"""
+    """启动持续对话，并维护当前进程内的消息历史。"""
 
     history: list[BaseMessage] = []
 
@@ -326,7 +409,7 @@ def run_chat_session(
             print("\n本轮请求已中断，可以继续输入。")
             continue
 
-        # 只显示本轮新增的工具结果。
+        # 仅展示本轮新增的工具执行消息。
         new_messages = updated_history[len(history) :]
 
         for message in new_messages:
@@ -345,7 +428,15 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
-    # Day 06：安全文件修改，不需要模型 API。
+    # Day 07：独立执行 pytest，不依赖模型 API。
+    if args.command == "test":
+        return run_test_command(
+            project=args.project,
+            target=args.target,
+            timeout_seconds=args.timeout,
+        )
+
+    # Day 06：安全文件修改。
     if args.command == "edit":
         return run_edit_command(
             project=args.project,
