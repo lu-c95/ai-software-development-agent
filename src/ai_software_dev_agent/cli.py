@@ -16,6 +16,7 @@ from ai_software_dev_agent.agent import (
     build_development_agent,
     run_agent_turn,
 )
+from ai_software_dev_agent.editor import CodeEditor, FileEditError
 from ai_software_dev_agent.model import (
     ModelConfigError,
     create_chat_model,
@@ -33,7 +34,7 @@ from ai_software_dev_agent.repository import (
 
 
 def describe_api_error(status_code: int) -> str:
-    """将常见 HTTP 错误转换成可理解的提示。"""
+    """将常见 HTTP 错误转换成易理解的提示。"""
 
     reasons = {
         400: "请求参数错误或模型不支持该功能",
@@ -97,19 +98,25 @@ def build_parser() -> argparse.ArgumentParser:
         help="生成结构化软件开发计划",
     )
 
-    # Day 05：新增持续对话入口。
     chat_parser = subparsers.add_parser(
         "chat",
         help="与能够探索代码仓库的 Agent 持续对话",
     )
 
-    # 需要指定目标仓库的命令，统一提供 --project。
+    # Day 06：新增安全编辑命令。
+    edit_parser = subparsers.add_parser(
+        "edit",
+        help="预览并确认一次 Python 代码修改",
+    )
+
+    # 需要指定仓库的命令统一提供 --project。
     for command_parser in (
         doctor_parser,
         inspect_parser,
         read_parser,
         search_parser,
         chat_parser,
+        edit_parser,
     ):
         command_parser.add_argument(
             "--project",
@@ -149,7 +156,87 @@ def build_parser() -> argparse.ArgumentParser:
         help="需要制定计划的软件开发任务",
     )
 
+    # 编辑必须明确给出目标文件和替换内容。
+    edit_parser.add_argument(
+        "--path",
+        required=True,
+        help="相对项目根目录的 Python 文件路径",
+    )
+
+    edit_parser.add_argument(
+        "--old",
+        required=True,
+        help="需要被精确匹配的旧代码片段",
+    )
+
+    edit_parser.add_argument(
+        "--new",
+        required=True,
+        help="替换后的新代码片段",
+    )
+
     return parser
+
+
+def run_edit_command(
+    project: Path,
+    file_path: str,
+    old_text: str,
+    new_text: str,
+) -> int:
+    """预览差异，获取用户确认，然后安全应用修改。"""
+
+    # 先生成预览，不立即修改文件。
+    try:
+        editor = CodeEditor(project)
+
+        preview = editor.preview_replace(
+            file_path,
+            old_text,
+            new_text,
+        )
+
+    except (FileEditError, RepositoryError, OSError) as exc:
+        print(
+            f"无法生成修改预览：{exc}",
+            file=sys.stderr,
+        )
+        return 1
+
+    print(f"目标文件：{preview.path}")
+    print("=== 修改预览（尚未写入）===")
+
+    print(
+        preview.diff,
+        end="" if preview.diff.endswith("\n") else "\n",
+    )
+
+    # 必须显式输入 yes 才允许执行写操作。
+    try:
+        confirmation = input("\n输入 yes 确认写入，其他任意输入取消：").strip()
+
+    except (EOFError, KeyboardInterrupt):
+        print("\n已取消修改，文件未写入。")
+        return 0
+
+    if confirmation != "yes":
+        print("已取消修改，文件未写入。")
+        return 0
+
+    # 确认之后调用已有组件，重新检查原始文件版本。
+    try:
+        editor.apply(preview)
+
+    except (FileEditError, RepositoryError, OSError) as exc:
+        print(
+            f"应用补丁失败：{exc}",
+            file=sys.stderr,
+        )
+        return 1
+
+    print(f"修改完成：{preview.path}")
+
+    return 0
 
 
 def run_chat_session(
@@ -169,7 +256,6 @@ def run_chat_session(
             question = input("\n你：").strip()
 
         except (EOFError, KeyboardInterrupt):
-            # Ctrl+D 或 Ctrl+C：正常结束交互。
             print("\n再见！")
             return 0
 
@@ -218,7 +304,6 @@ def run_chat_session(
             continue
 
         except RecursionError:
-            # LangGraph 的 GraphRecursionError 继承 RecursionError。
             print(
                 "Agent 达到执行步数上限，本轮历史未保存，请尝试简化问题。",
                 file=sys.stderr,
@@ -241,7 +326,7 @@ def run_chat_session(
             print("\n本轮请求已中断，可以继续输入。")
             continue
 
-        # 只展示本轮新增的工具消息，不重复展示历史消息。
+        # 只显示本轮新增的工具结果。
         new_messages = updated_history[len(history) :]
 
         for message in new_messages:
@@ -249,7 +334,6 @@ def run_chat_session(
                 tool_name = message.name or "未知工具"
                 print(f"[工具返回] {tool_name}")
 
-        # 只有本轮完整成功，才更新会话历史。
         history = updated_history
 
         print(f"Agent：{answer}")
@@ -261,7 +345,16 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
-    # Day 05：Agent 交互会话。
+    # Day 06：安全文件修改，不需要模型 API。
+    if args.command == "edit":
+        return run_edit_command(
+            project=args.project,
+            file_path=args.path,
+            old_text=args.old,
+            new_text=args.new,
+        )
+
+    # Day 05：交互式 Agent。
     if args.command == "chat":
         try:
             settings = load_model_settings()

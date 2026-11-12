@@ -16,6 +16,10 @@ from ai_software_dev_agent.planning import (
     PlanStep,
 )
 
+# ==========================================================
+# Day 01：项目检查
+# ==========================================================
+
 
 def test_doctor_accepts_existing_directory(
     tmp_path: Path,
@@ -64,6 +68,11 @@ def test_help_displays_doctor_command(
 
     assert exc_info.value.code == 0
     assert "doctor" in capsys.readouterr().out
+
+
+# ==========================================================
+# Day 02：仓库探索
+# ==========================================================
 
 
 def test_inspect_lists_files(
@@ -133,6 +142,11 @@ def test_search_displays_matches(
     assert "a.py:1: def main():" in capsys.readouterr().out
 
 
+# ==========================================================
+# Day 03：模型问答
+# ==========================================================
+
+
 def test_ask_uses_fake_model(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -199,6 +213,11 @@ def test_ask_reports_missing_config(
 
     assert exc_info.value.code == 2
     assert "缺少 API Key" in capsys.readouterr().err
+
+
+# ==========================================================
+# Day 04：结构化任务规划
+# ==========================================================
 
 
 def test_plan_outputs_structured_json(
@@ -309,7 +328,7 @@ def test_plan_reports_structured_output_error(
 
 
 # ==========================================================
-# Day 05：Interactive CLI 测试
+# Day 05：Interactive CLI
 # ==========================================================
 
 
@@ -317,8 +336,6 @@ def test_chat_command_builds_agent(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """chat 命令应正确创建 Agent 并启动会话。"""
-
     settings = ModelSettings(
         api_key="test-key",
         model_name="test-model",
@@ -386,8 +403,6 @@ def test_chat_preserves_history_and_shows_tool(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """连续问答应保留历史，并显示本轮工具执行记录。"""
-
     inputs = iter(
         [
             "读取 demo.py",
@@ -463,8 +478,6 @@ def test_chat_new_clears_history(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """执行 /new 后，下一轮不应携带旧消息。"""
-
     inputs = iter(
         [
             "第一个问题",
@@ -512,8 +525,6 @@ def test_chat_help_and_unknown_command(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """帮助、空输入和未知命令不应该触发模型调用。"""
-
     inputs = iter(
         [
             "   ",
@@ -556,8 +567,6 @@ def test_chat_keeps_running_after_agent_error(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """一次 Agent 失败后，应允许再次提问。"""
-
     inputs = iter(
         [
             "这次失败",
@@ -609,8 +618,6 @@ def test_chat_exits_on_eof(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """输入流结束时，交互式 CLI 应正常退出。"""
-
     def raise_eof(_prompt: str) -> str:
         raise EOFError
 
@@ -623,3 +630,284 @@ def test_chat_exits_on_eof(
 
     assert result == 0
     assert "再见" in capsys.readouterr().out
+
+
+# ==========================================================
+# Day 06：File Editing & Git Diff
+# ==========================================================
+
+
+def test_edit_applies_after_exact_confirmation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """输入精确的 yes 后，才允许执行实际写入。"""
+
+    target = tmp_path / "demo.py"
+    target.write_text(
+        "def add(a, b):\n    return a+b\n",
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(
+        "builtins.input",
+        lambda _prompt: "yes",
+    )
+
+    result = cli.main(
+        [
+            "edit",
+            "--project",
+            str(tmp_path),
+            "--path",
+            "demo.py",
+            "--old",
+            "return a+b",
+            "--new",
+            "return a + b",
+        ]
+    )
+
+    output = capsys.readouterr().out
+
+    assert result == 0
+    assert "修改预览" in output
+    assert "-    return a+b" in output
+    assert "+    return a + b" in output
+    assert "修改完成" in output
+
+    assert target.read_text(encoding="utf-8") == ("def add(a, b):\n    return a + b\n")
+
+
+@pytest.mark.parametrize(
+    "confirmation",
+    ["", "no", "YES"],
+)
+def test_edit_cancels_without_exact_yes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    confirmation: str,
+) -> None:
+    """没有输入精确的 yes 时不能修改文件。"""
+
+    target = tmp_path / "demo.py"
+    target.write_text(
+        "value = 1\n",
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(
+        "builtins.input",
+        lambda _prompt: confirmation,
+    )
+
+    result = cli.main(
+        [
+            "edit",
+            "--project",
+            str(tmp_path),
+            "--path",
+            "demo.py",
+            "--old",
+            "value = 1",
+            "--new",
+            "value = 2",
+        ]
+    )
+
+    output = capsys.readouterr().out
+
+    assert result == 0
+    assert "修改预览" in output
+    assert "已取消修改" in output
+    assert target.read_text(encoding="utf-8") == "value = 1\n"
+
+
+def test_edit_rejects_unmatched_content(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """找不到指定旧代码时，不能进入确认或写入阶段。"""
+
+    target = tmp_path / "demo.py"
+    target.write_text(
+        "value = 1\n",
+        encoding="utf-8",
+    )
+
+    result = cli.main(
+        [
+            "edit",
+            "--project",
+            str(tmp_path),
+            "--path",
+            "demo.py",
+            "--old",
+            "value = 999",
+            "--new",
+            "value = 2",
+        ]
+    )
+
+    captured = capsys.readouterr()
+
+    assert result == 1
+    assert "实际匹配 0 次" in captured.err
+    assert target.read_text(encoding="utf-8") == "value = 1\n"
+
+
+def test_edit_rejects_unsafe_path(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """CLI 不能绕过 CodeEditor 的文件路径限制。"""
+
+    result = cli.main(
+        [
+            "edit",
+            "--project",
+            str(tmp_path),
+            "--path",
+            "../outside.py",
+            "--old",
+            "old",
+            "--new",
+            "new",
+        ]
+    )
+
+    assert result == 1
+    assert "无法生成修改预览" in capsys.readouterr().err
+
+
+def test_edit_rejects_stale_preview(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """预览后文件被外部修改时，应拒绝覆盖。"""
+
+    target = tmp_path / "demo.py"
+    target.write_text(
+        "value = 1\n",
+        encoding="utf-8",
+    )
+
+    def change_file_before_confirmation(_prompt: str) -> str:
+        # 模拟用户查看预览期间，其他程序修改了文件。
+        target.write_text(
+            "value = 99\n",
+            encoding="utf-8",
+        )
+        return "yes"
+
+    monkeypatch.setattr(
+        "builtins.input",
+        change_file_before_confirmation,
+    )
+
+    result = cli.main(
+        [
+            "edit",
+            "--project",
+            str(tmp_path),
+            "--path",
+            "demo.py",
+            "--old",
+            "value = 1",
+            "--new",
+            "value = 2",
+        ]
+    )
+
+    captured = capsys.readouterr()
+
+    assert result == 1
+    assert "文件在预览后已发生变化" in captured.err
+    assert target.read_text(encoding="utf-8") == "value = 99\n"
+
+
+def test_edit_cancels_on_eof(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """确认阶段输入流结束时，文件必须保持不变。"""
+
+    target = tmp_path / "demo.py"
+    target.write_text(
+        "value = 1\n",
+        encoding="utf-8",
+    )
+
+    def raise_eof(_prompt: str) -> str:
+        raise EOFError
+
+    monkeypatch.setattr(
+        "builtins.input",
+        raise_eof,
+    )
+
+    result = cli.main(
+        [
+            "edit",
+            "--project",
+            str(tmp_path),
+            "--path",
+            "demo.py",
+            "--old",
+            "value = 1",
+            "--new",
+            "value = 2",
+        ]
+    )
+
+    assert result == 0
+    assert target.read_text(encoding="utf-8") == "value = 1\n"
+    assert "已取消修改" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        ["--path", "demo.py", "--new", "changed"],
+        ["--path", "demo.py", "--old", "original"],
+    ],
+)
+def test_edit_requires_old_and_new_arguments(
+    tmp_path: Path,
+    arguments: list[str],
+) -> None:
+    """--old、--new 均是必填参数。"""
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli.main(
+            [
+                "edit",
+                "--project",
+                str(tmp_path),
+                *arguments,
+            ]
+        )
+
+    assert exc_info.value.code == 2
+
+
+def test_edit_help_displays_arguments(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """edit 帮助信息必须说明全部编辑参数。"""
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli.main(["edit", "--help"])
+
+    assert exc_info.value.code == 0
+
+    output = capsys.readouterr().out
+
+    assert "--project" in output
+    assert "--path" in output
+    assert "--old" in output
+    assert "--new" in output
