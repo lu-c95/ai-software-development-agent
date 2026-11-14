@@ -7,6 +7,7 @@ from ai_software_dev_agent.commands import (
     agent_workflow,
     ask,
     chat,
+    conditional_workflow,
     edit,
     plan,
     repository,
@@ -43,15 +44,16 @@ def build_parser() -> argparse.ArgumentParser:
     edit.register(subparsers)
     testing.register(subparsers)
     workflow.register(subparsers)
-
-    # Day 09：新增 LangChain Agent + LangGraph 集成命令。
     agent_workflow.register(subparsers)
+
+    # Day 10：条件路由与有界错误恢复工作流。
+    conditional_workflow.register(subparsers)
 
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
-    """解析参数并分发给对应的命令处理函数。"""
+    """解析参数并分发给对应命令。"""
 
     parser = build_parser()
     args = parser.parse_args(argv)
