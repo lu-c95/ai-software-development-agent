@@ -4,6 +4,7 @@ import argparse
 
 from ai_software_dev_agent import __version__
 from ai_software_dev_agent.commands import (
+    agent_workflow,
     ask,
     chat,
     edit,
@@ -35,16 +36,16 @@ def build_parser() -> argparse.ArgumentParser:
         required=True,
     )
 
-    # 每个命令模块负责自己的参数和 handler。
     repository.register(subparsers)
     ask.register(subparsers)
     plan.register(subparsers)
     chat.register(subparsers)
     edit.register(subparsers)
     testing.register(subparsers)
-
-    # Day 08：增加 LangGraph 工作流命令。
     workflow.register(subparsers)
+
+    # Day 09：新增 LangChain Agent + LangGraph 集成命令。
+    agent_workflow.register(subparsers)
 
     return parser
 
