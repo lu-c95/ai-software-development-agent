@@ -9,6 +9,7 @@ from ai_software_dev_agent.commands import (
     chat,
     conditional_workflow,
     edit,
+    edit_approval,
     plan,
     repository,
     testing,
@@ -48,6 +49,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     # Day 10：条件路由与有界错误恢复工作流。
     conditional_workflow.register(subparsers)
+
+    edit_approval.register(subparsers)
 
     return parser
 
