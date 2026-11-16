@@ -8,7 +8,9 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from langchain_core.runnables import Runnable
 
 from ai_software_dev_agent.model import ModelConfigError
-from ai_software_dev_agent.tools import create_repository_tools
+from ai_software_dev_agent.secure_tools import (
+    create_secure_repository_tools,
+)
 
 
 class AgentExecutionError(RuntimeError):
@@ -32,7 +34,7 @@ def build_development_agent(
 ) -> Runnable:
     """使用 LangChain 创建绑定指定代码仓库的 Agent。"""
 
-    tools = create_repository_tools(project)
+    tools = create_secure_repository_tools(project)
 
     return create_agent(
         model=model,

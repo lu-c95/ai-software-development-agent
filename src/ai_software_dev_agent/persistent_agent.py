@@ -11,9 +11,11 @@ from langgraph.graph.state import CompiledStateGraph
 from ai_software_dev_agent.agent import (
     AGENT_SYSTEM_PROMPT,
     AgentExecutionError,
-    create_repository_tools,
 )
 from ai_software_dev_agent.model import ModelConfigError
+from ai_software_dev_agent.secure_tools import (
+    create_secure_repository_tools,
+)
 
 # 与 Day 05 原有 Agent 保持一致的内部执行步数限制。
 AGENT_RECURSION_LIMIT = 12
@@ -26,8 +28,8 @@ def build_persistent_development_agent(
 ) -> CompiledStateGraph:
     """使用原有系统提示词和仓库工具，创建可持久化 Agent。"""
 
-    # 直接复用 Day 05 的工具定义，不创建另一套工具。
-    tools = create_repository_tools(project)
+    # Day 13：持久化会话也必须使用受限工具。
+    tools = create_secure_repository_tools(project)
 
     return create_agent(
         model=model,

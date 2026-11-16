@@ -30,7 +30,13 @@ class ToolAwareFakeModel(FakeMessagesListChatModel):
 def test_agent_executes_repository_tool(tmp_path: Path) -> None:
     """Agent 应自动执行工具，并将结果返回模型。"""
 
-    (tmp_path / "demo.py").write_text(
+    # Day 13：测试文件放在明确授权的 src/ 目录。
+    src_dir = tmp_path / "src"
+    src_dir.mkdir(exist_ok=True)
+
+    demo_file = src_dir / "demo.py"
+
+    demo_file.write_text(
         "def greet():\n    return 'hello'\n",
         encoding="utf-8",
     )
@@ -43,7 +49,7 @@ def test_agent_executes_repository_tool(tmp_path: Path) -> None:
                 tool_calls=[
                     {
                         "name": "read_repository_file",
-                        "args": {"path": "demo.py"},
+                        "args": {"path": "src/demo.py"},
                         "id": "call-read-1",
                         "type": "tool_call",
                     }
