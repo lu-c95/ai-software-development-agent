@@ -128,3 +128,27 @@ def test_reject_inconsistent_success_rate(
 
     with pytest.raises(ValueError, match="成功率不一致"):
         render_markdown_report(data)
+
+
+def test_reject_inconsistent_category_success_rate(
+    sample_report: dict,
+) -> None:
+    """分类成功率与通过数量不一致时，应拒绝生成报告。"""
+
+    # 复制测试数据，避免修改原始 Fixture 对象。
+    data = deepcopy(sample_report)
+
+    # 原始数据：
+    # security.total = 1
+    # security.passed = 0
+    # security.success_rate = 0.0
+    #
+    # 故意把分类成功率改成错误的 100%。
+    data["categories"]["security"]["success_rate"] = 100.0
+
+    # 正确实现应该发现统计矛盾并抛出 ValueError。
+    with pytest.raises(
+        ValueError,
+        match="分类成功率不一致",
+    ):
+        render_markdown_report(data)

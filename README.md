@@ -328,3 +328,9 @@ CI 不应依赖个人 OpenRouter API Key。
 重点是理解每个模块的作用，并通过真实编码和测试逐步提升工程能力。
 
 不应将本项目描述为已经达到生产级、能够完全自主替代开发人员的软件开发系统。
+
+## 项目实战与成果
+
+- [Day 18｜Dogfooding 自身修复实战](docs/Day18-Dogfooding-Report.md)
+- [Day 18｜最终学习与交付记录](docs/Day18-Final-Delivery.md)
+- [项目技术与面试展示](docs/Project-Showcase.md)
