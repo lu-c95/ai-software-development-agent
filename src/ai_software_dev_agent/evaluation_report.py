@@ -58,6 +58,16 @@ def validate_report(data: dict[str, Any]) -> None:
         ):
             raise ValueError(f"分类统计不一致：{category}")
 
+        # 根据分类的真实通过数量重新计算成功率。
+        expected_category_rate = round(
+            category_passed / len(category_results) * 100,
+            2,
+        )
+
+        # 分类成功率与实际结果不一致时拒绝生成报告。
+        if abs(stats["success_rate"] - expected_category_rate) > 0.001:
+            raise ValueError(f"分类成功率不一致：{category}")
+
 
 def render_markdown_report(
     data: dict[str, Any],
