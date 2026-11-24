@@ -1,0 +1,71 @@
+
+# Day 17：AI Software Development Agent 持续集成
+
+name: Python CI
+
+# 触发条件：推送 main、创建或更新 PR、手动触发。
+on:
+  push:
+    branches:
+      - main
+
+  pull_request:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+# CI 只需要读取仓库，不需要写入仓库的权限。
+permissions:
+  contents: read
+
+jobs:
+  quality-and-tests:
+    name: Python 3.13 / pytest / Ruff
+
+    # 使用 GitHub 托管的 Linux 环境。
+    runs-on: ubuntu-latest
+
+    # 防止异常任务无限运行。
+    timeout-minutes: 20
+
+    env:
+      PYTHONUTF8: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+      TZ: Asia/Shanghai
+
+    steps:
+      # 1. 将 GitHub 仓库代码检出到 Runner。
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # 2. 安装指定版本的 Python。
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      # 3. 打印 Python 版本，方便 Debug。
+      - name: Verify Python version
+        run: python --version
+
+      # 4. 安装当前项目和测试工具。
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e . pytest ruff
+
+      # 5. Ruff 静态代码检查。
+      - name: Ruff lint
+        run: python -m ruff check .
+
+      # 6. Ruff 格式检查。
+      - name: Ruff format
+        run: python -m ruff format --check .
+
+      # 7. 运行全量自动化测试。
+      - name: Run pytest
+        run: python -m pytest -v
+
