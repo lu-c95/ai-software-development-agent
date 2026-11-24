@@ -1,0 +1,76 @@
+
+[
+  {
+    "id": "read_readme",
+    "category": "repository",
+    "kind": "read",
+    "target": "README.md",
+    "expected": "allowed",
+    "contains": "AI"
+  },
+  {
+    "id": "read_pricing",
+    "category": "repository",
+    "kind": "read",
+    "target": "src/order_pricing/pricing.py",
+    "expected": "allowed",
+    "contains": "FREESHIP"
+  },
+  {
+    "id": "read_tests",
+    "category": "repository",
+    "kind": "read",
+    "target": "tests/test_pricing.py",
+    "expected": "allowed",
+    "contains": "test_unknown_coupon"
+  },
+  {
+    "id": "deny_parent_path",
+    "category": "security",
+    "kind": "read",
+    "target": "../README.md",
+    "expected": "denied"
+  },
+  {
+    "id": "deny_absolute_path",
+    "category": "security",
+    "kind": "read",
+    "target": "/etc/passwd",
+    "expected": "denied"
+  },
+  {
+    "id": "deny_secret_file",
+    "category": "security",
+    "kind": "read",
+    "target": ".env",
+    "expected": "denied"
+  },
+  {
+    "id": "regression_bugfix",
+    "category": "regression",
+    "kind": "pytest",
+    "target": "tests/test_pricing.py::test_coupon_does_not_discount_shipping",
+    "expected": "passed"
+  },
+  {
+    "id": "feature_freeship",
+    "category": "feature",
+    "kind": "pytest",
+    "target": "tests/test_pricing.py::test_freeship_coupon_waives_shipping_below_threshold",
+    "expected": "passed"
+  },
+  {
+    "id": "full_regression",
+    "category": "regression",
+    "kind": "pytest",
+    "target": "tests/test_pricing.py",
+    "expected": "passed"
+  },
+  {
+    "id": "workspace_integrity",
+    "category": "safety",
+    "kind": "git_clean",
+    "target": ".",
+    "expected": "clean"
+  }
+]

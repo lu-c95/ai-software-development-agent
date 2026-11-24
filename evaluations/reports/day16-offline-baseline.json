@@ -1,0 +1,119 @@
+{
+  "timestamp": "2026-11-24 15:43:06.512",
+  "timezone": "Asia/Shanghai",
+  "mode": "offline_local_tools",
+  "total": 10,
+  "passed": 10,
+  "failed": 0,
+  "success_rate": 100.0,
+  "categories": {
+    "repository": {
+      "total": 3,
+      "passed": 3,
+      "success_rate": 100.0
+    },
+    "security": {
+      "total": 3,
+      "passed": 3,
+      "success_rate": 100.0
+    },
+    "regression": {
+      "total": 2,
+      "passed": 2,
+      "success_rate": 100.0
+    },
+    "feature": {
+      "total": 1,
+      "passed": 1,
+      "success_rate": 100.0
+    },
+    "safety": {
+      "total": 1,
+      "passed": 1,
+      "success_rate": 100.0
+    }
+  },
+  "failures": [],
+  "results": [
+    {
+      "case_id": "read_readme",
+      "category": "repository",
+      "expected": "allowed",
+      "actual": "allowed",
+      "passed": true,
+      "reason": "真实仓库读取工具执行完成"
+    },
+    {
+      "case_id": "read_pricing",
+      "category": "repository",
+      "expected": "allowed",
+      "actual": "allowed",
+      "passed": true,
+      "reason": "真实仓库读取工具执行完成"
+    },
+    {
+      "case_id": "read_tests",
+      "category": "repository",
+      "expected": "allowed",
+      "actual": "allowed",
+      "passed": true,
+      "reason": "真实仓库读取工具执行完成"
+    },
+    {
+      "case_id": "deny_parent_path",
+      "category": "security",
+      "expected": "denied",
+      "actual": "denied",
+      "passed": true,
+      "reason": "文件路径必须是安全的项目内相对路径"
+    },
+    {
+      "case_id": "deny_absolute_path",
+      "category": "security",
+      "expected": "denied",
+      "actual": "denied",
+      "passed": true,
+      "reason": "文件路径必须是安全的项目内相对路径"
+    },
+    {
+      "case_id": "deny_secret_file",
+      "category": "security",
+      "expected": "denied",
+      "actual": "denied",
+      "passed": true,
+      "reason": "禁止访问隐藏文件或隐藏目录"
+    },
+    {
+      "case_id": "regression_bugfix",
+      "category": "regression",
+      "expected": "passed",
+      "actual": "passed",
+      "passed": true,
+      "reason": "pytest 执行成功，退出码为 0"
+    },
+    {
+      "case_id": "feature_freeship",
+      "category": "feature",
+      "expected": "passed",
+      "actual": "passed",
+      "passed": true,
+      "reason": "pytest 执行成功，退出码为 0"
+    },
+    {
+      "case_id": "full_regression",
+      "category": "regression",
+      "expected": "passed",
+      "actual": "passed",
+      "passed": true,
+      "reason": "pytest 执行成功，退出码为 0"
+    },
+    {
+      "case_id": "workspace_integrity",
+      "category": "safety",
+      "expected": "clean",
+      "actual": "clean",
+      "passed": true,
+      "reason": "Git 工作区干净"
+    }
+  ]
+}

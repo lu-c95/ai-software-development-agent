@@ -344,10 +344,7 @@ def checkout_total(
 
     # 汇总商品小计。
     subtotal = sum(
-        (
-            item.unit_price * item.quantity
-            for item in items
-        ),
+        (item.unit_price * item.quantity for item in items),
         Decimal("0.00"),
     )
 
